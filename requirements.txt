@@ -1,0 +1,17 @@
+langgraph
+langchain-community
+langchain-core
+langchain-openai
+langchain-ollama
+langgraph-checkpoint-sqlite
+termcolor
+matplotlib
+fastapi
+fastapi[standard]
+uvicorn
+streamlit
+tiktoken
+markdown
+kokoro>=0.9.4
+soundfile
+python-dotenv

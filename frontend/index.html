@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tactical Assistant Chat</title>
+
+  <!--Tailwind configuration-->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          animation: {
+            'fade-in-up': 'fadeInUp 0.4s ease-out both',
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': {
+                opacity: '0',
+                transform: 'translateY(6px)'
+              },
+              '100%': {
+                opacity: '1',
+                transform: 'translateY(0)'
+              }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="node_modules/mathjax/es5/tex-mml-chtml.js" async></script>
+
+  <script>
+    function initializeChatSession() {
+      const sessionStarted = sessionStorage.getItem("chat_initiated");
+      const language = getCurrentLanguage(); // "EN" or "ES"
+      console.log(language)
+      const greeting = language === "ES" ? "Hola." : "Hello.";
+      if (!sessionStarted) {
+        fakeUserMessage(greeting);
+        console.log("✅ Initializing chat session in", language);
+        sessionStorage.setItem("chat_initiated", "true");
+      }
+      
+    }
+
+    function restartSession() {
+      // Clear the chat visually
+      const chat = document.getElementById("chat");
+      const detailsBox = document.getElementById("details-element");
+      chat.innerHTML = `<div class="text-center text-sm text-zinc-500 mb-4">Restarting session ...</div>`;
+      detailsBox.innerHTML = "";
+
+      // Send "Exit" to the backend, which should trigger session reset
+      fakeUserMessage("Exit");
+    }
+
+  </script>
+
+  <!--Chat functions-->
+  <script>
+    let lastUserMessageTime = new Date(); // 🕒 Track last user message
+
+    function humanFriendlyTime24h(date) {
+      const now = new Date();
+      
+      const isSameDate = (d1, d2) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+    
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+    
+      const pad = (n) => n.toString().padStart(2, '0');
+      const hours = pad(date.getHours());
+      const minutes = pad(date.getMinutes());
+    
+      if (isSameDate(date, now)) {
+        return `${hours}:${minutes}`;
+      } else if (isSameDate(date, yesterday)) {
+        return `Yesterday at ${hours}:${minutes}`;
+      } else {
+        const month = date.toLocaleString('default', { month: 'short' });
+        const day = pad(date.getDate());
+        const year = date.getFullYear();
+        return `${month} ${day}, ${year} at ${hours}:${minutes}`;
+      }
+    }
+
+    function clearPreviousAIAnimations() {
+      const chat = document.getElementById("chat");
+      const animatedAIMessages = chat.querySelectorAll(".display-ai-message.animate-fade-in-up");
+      animatedAIMessages.forEach(el => el.classList.remove("animate-fade-in-up"));
+    }
+    
+    function renderUserMessage(content) {
+      const chat = document.getElementById("chat");
+      chat.innerHTML += `
+        <div class="flex justify-end"><div class="mr-20 text-xs text-zinc-500 mt-1 mb-1">${humanFriendlyTime24h(new Date())}</div></div>
+        <div class="flex justify-end mb-2">
+          <div class="mr-20 bg-sky-200 dark:bg-zinc-200 text-black dark:text-black p-3 rounded-2xl max-w-2xl">
+            ${content}
+          </div>
+        </div>`;
+
+
+      chat.scrollTop = chat.scrollHeight;
+      lastUserMessageTime = new Date(); // ✅ Update timestamp
+    }
+
+    function renderMessagesFromServer(data, isPoll = false) {
+      const detailsBox = document.getElementById("details-element");
+      const chat = document.getElementById("chat");
+      clearPreviousAIAnimations();
+
+
+      // 1. Grab the raw AI message string
+      const formatted_ai_message = data.ai_messages || "";
+      const ttsText = data.tts_text || ""; 
+      const ttsAudio = data.tts_audio || ""; 
+
+
+      // 2. Decide if this is a “warning” message (starts with ⚠️)
+      const WARNING_PREFIX = "\u26A0\uFE0F"; // the ⚠️ symbol
+      const isWarning = formatted_ai_message.trim().includes(WARNING_PREFIX);
+
+      const DOUBLE_CHECK_PREFIX = "&#x1F6D1;"; // the ✅ symbol
+      const isDoubleCheck = formatted_ai_message.trim().includes(DOUBLE_CHECK_PREFIX);
+
+      // 3. Choose bubble classes based on warning vs. normal
+      //    (– you can tweak these Tailwind classes however you like –)
+      let bubbleClasses;
+      if (isWarning) {
+        // Red background + white text for warnings
+        bubbleClasses = `
+          ml-16 
+          bg-red-500 dark:bg-red-500 
+          text-white 
+          p-3 rounded-2xl 
+          max-w-2xl 
+          prose prose-white
+        `;
+      } else if (isDoubleCheck) {
+        // Blue background + white text for double-checks
+        bubbleClasses = `
+          ml-16 
+          bg-red-500 dark:bg-blue-500 
+          text-white 
+          p-3 rounded-2xl 
+          max-w-2xl 
+          prose prose-white
+        `;
+      }
+      else {
+        // Default neutral bubble
+        bubbleClasses = `
+          ml-16 
+          bg-zinc-50 dark:bg-zinc-800 
+          text-black dark:text-white 
+          p-3 rounded-2xl 
+          max-w-2xl 
+          prose dark:prose-invert
+        `;
+      }
+
+
+      // 4. If session reset logic stays the same ✅
+      if (data.ai_messages.trim().includes("Session reset.")) {
+        // Clear chat and Details
+        chat.innerHTML = `
+          <div class="text-center text-sm text-zinc-500 mb-4">
+            New session started at ${humanFriendlyTime24h(new Date())}
+          </div>`;
+
+        // ✅ Delay both to ensure render cycle completes
+        setTimeout(() => {
+          sessionStorage.removeItem("chat_initiated");
+          initializeChatSession();
+        }, 3000);
+
+      } else{
+          // 5. Render the AI‐message bubble and TTS audio
+
+          // Timestamp
+          chat.innerHTML += `
+            <div class="ml-16 text-xs text-zinc-500 mt-1 mb-1">
+              ${humanFriendlyTime24h(new Date())}
+            </div>`;
+
+          // AI message (TTS) 
+          if (ttsText || ttsAudio) { 
+            const audioID = `audio-${Date.now()}`; // Unique ID for this audio block
+            const indicatorID = `speaking-indicator-${Date.now()}`;
+
+            chat.innerHTML += `
+              <div class="ml-16 mt-2 mb-4 flex flex-col gap-1">
+                
+                  <audio id="${audioID}" class="w-full max-w-xs h-8">
+                    <source src="data:audio/wav;base64,${ttsAudio}" type="audio/wav" />
+                    Your browser does not support the audio element.
+                  </audio>
+                  <div id="${indicatorID}" class="text-sm text-blue-500 animate-pulse flex items-center gap-2">
+                    <span> &#11044;  ${ttsText}</span> 
+                  </div>
+              </div>`;
+
+              
+            setTimeout(() => {
+              const audioElem = document.getElementById(audioID);
+              const indicatorElem = document.getElementById(indicatorID);
+
+              if (audioElem) {
+                audioElem.play().catch(err => {
+                  console.warn("Autoplay blocked or failed:", err);
+                });
+
+                audioElem.addEventListener('ended', () => {
+                  if (indicatorElem) {
+                    indicatorElem.classList.remove('animate-pulse');
+                    indicatorElem.classList.add('text-zinc-500');
+                  }
+                });
+              }
+            }, 200);
+              
+          }
+
+          // AI message (text)
+          chat.innerHTML += `
+            <div class="display-ai-message animate-fade-in-up">
+              <div class="${bubbleClasses}">
+                ${formatted_ai_message}
+              </div>
+            </div>`;
+
+
+              
+        // 6. Render tool‐ and system‐messages exactly as before:
+        const formatted_tool_message = data.tool_messages.replace(/\n/g, "<br>");
+        if (formatted_tool_message.trim()) {
+          detailsBox.innerHTML += `<strong> Tool </strong><span class="text-xs text-zinc-500 italic">\t\t${humanFriendlyTime24h(new Date())}</span><br>
+          <div class="mb-2 bg-white dark:bg-zinc-600 p-2 rounded">
+            ${formatted_tool_message}
+          </div>`;
+        }
+        
+        const formatted_system_message = data.system_messages.replace(/\n/g, "<br>");
+        if (formatted_system_message.trim()) {
+          detailsBox.innerHTML += `<strong> System </strong><span class="text-xs text-zinc-500 italic">\t\t${humanFriendlyTime24h(new Date())}</span><br>
+          <div class="mb-2 bg-white dark:bg-zinc-600 p-2 rounded">
+            ${formatted_system_message}
+          </div>`;
+        }
+
+        // 7. Scroll both panes to bottom
+        chat.scrollTop = chat.scrollHeight;
+        detailsBox.scrollTop = detailsBox.scrollHeight;
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          MathJax.typesetPromise();
+        }
+      }
+    }
+
+    function showThinkingMessage() {
+      const chat = document.getElementById("chat");
+
+      const thinkingHTML = `
+        <div id="thinking-message" class="display-ai-message animate-fade-in-up">
+          <div class="flex justify-start mb-4">
+            <div class="ml-16 bg-cyan-50 dark:bg-zinc-700 text-black dark:text-white p-3 rounded-2xl max-w-2xl flex items-center gap-2">
+              <span class="animate-pulse"><span class="dots">. . .</span></span>
+            </div>
+          </div>
+        </div>`;
+
+      chat.innerHTML += thinkingHTML;
+      chat.scrollTop = chat.scrollHeight;
+      
+    }
+    
+    function removeThinkingMessage() {
+      const existing = document.getElementById("thinking-message");
+      if (existing) existing.remove();
+    }
+    
+    async function sendMessage(event) {
+      const language = getCurrentLanguage(); // "EN" or "ES"
+      event.preventDefault();
+      const input = document.getElementById("message");
+
+      const userMsg = input.value.trim();
+      if (!userMsg) return;
+      // ✅ Clear previous AI animation before rendering user message
+      clearPreviousAIAnimations();
+      renderUserMessage(userMsg); // Show USER MESSAGE
+      input.value = "";
+
+      showThinkingMessage(); // 🧠 Show "Thinking..."
+
+
+      const res = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg , language: language})
+      });
+
+      const data = await res.json(); 
+      console.log("📦 Full response data:", data);
+      
+      removeThinkingMessage(); // ✅ Remove once reply is ready
+      renderMessagesFromServer(data) // Show NEW MESSAGES
+      
+      const chat = document.getElementById("chat");
+      const detailsBox = document.getElementById("details-element");
+      chat.scrollTop = chat.scrollHeight;
+      detailsBox.scrollTop = detailsBox.scrollHeight;
+
+    }
+
+    async function fakeUserMessage(content) {
+      if (!content) return;
+      const language = getCurrentLanguage(); // "EN" or "ES"
+
+      showThinkingMessage(); // 🧠 Show "Thinking..."
+
+      clearPreviousAIAnimations();
+
+      const res = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: content, language : language })
+      });
+
+      const data = await res.json();
+
+      removeThinkingMessage(); // ✅ Remove once reply is ready
+      renderMessagesFromServer(data); // Show NEW MESSAGES
+    }
+
+    async function fetchConfig() {
+      try {
+        const res = await fetch("http://localhost:8000/config");
+        const data = await res.json();
+
+        // Display it wherever you want:
+        document.getElementById("version").textContent = data.software_version;
+
+      } catch (err) {
+        console.error("Failed to fetch config:", err);
+      }
+    }
+
+    function toggleSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      const isHidden = sidebar.classList.toggle("hidden");
+    }
+
+    function toggleLanguage() {
+      const currentLang = localStorage.getItem("chat_language") || "EN";
+      const newLang = currentLang === "EN" ? "ES" : "EN";
+      localStorage.setItem("chat_language", newLang);
+
+      // Update the button label
+      document.getElementById("language-label").textContent = newLang.toUpperCase();
+
+      // Trigger session reset
+      restartSession();
+    }
+
+    function getCurrentLanguage() {
+      return localStorage.getItem("chat_language") || "EN";
+    }
+    
+    window.onload = () => {
+      console.log("✅ Frontend loaded");
+      initializeChatSession(); // Initialize chat session
+      fetchConfig(); // Get software version, etc.
+    };
+    
+  </script>
+</head>
+
+
+<!--Body-->
+<body class="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 h-screen w-screen flex">
+
+  <!-- 📱 Main layout column -->
+  <div class="flex flex-col flex-1 h-screen">
+
+    <!-- 🔼 Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 flex justify-between items-center p-4 bg-cyan-50 dark:bg-zinc-950 shadow-md">
+      <img src="assistant_logo.svg" alt="LOGO" class="h-10 w-auto"/>
+      <div class="flex gap-2">
+
+        <!-- 🌐 Language Toggle -->
+        <button onclick="toggleLanguage()" class="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
+          <span id="language-label">EN</span>
+        </button>
+
+        <!-- Reset -->
+        <button onclick="restartSession()" class="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"> 
+          &#x2B6E;  <!-- Restart Session Button Unicode clockwise open circle arrow -->
+        </button>
+
+        <!-- Hide / Show Details -->
+        <button onclick="toggleSidebar()" class="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
+          &#9432; <!-- Information Button Unicode -->
+        </button>
+      </div>
+    </header>
+
+    <!-- 💬 Chat area -->
+    <main id="chat" class="flex-1 overflow-y-auto p-6 pt-[80px] bg-zinc-50 dark:bg-zinc-800">
+      <!-- Messages go here -->
+    </main>
+
+    <!-- 🔤 Input field -->
+    <footer class="p-4 bg-zinc-50 dark:bg-zinc-800">
+      <form onsubmit="sendMessage(event)" class="flex justify-center">
+        <div class="relative w-full max-w-3xl"> <!-- control width here -->
+          <input
+            id="message"
+            type="text"
+            autocomplete="off"
+            placeholder="Type your message ..."
+            class="w-full pr-12 border border-zinc-300 dark:border-zinc-800 p-3 pl-4 rounded-2xl bg-white dark:bg-zinc-600 dark:text-white"
+          />
+          <button
+            type="submit"
+            title="Send"
+            class="absolute right-6 top-1/2 -translate-y-1/2 text-blue-600 hover:text-blue-800 dark:text-white dark:hover:text-blue-400 text-lg"
+          >
+            &#10148;
+          </button>
+        </div>
+      </form>
+    </footer>
+
+    <!-- 📊 Version info -->
+    <div class="flex justify-end mt-2 mb-1 mr-4">
+      <div class="text-xs text-zinc-500">
+        Version: <span id="version">loading...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔲 Sidebar -->
+  <aside id="sidebar" class="w-96 h-full pt-[72px] bg-white dark:bg-zinc-600 p-4 shadow-md hidden">
+    <div id="details-element" class="mb-6 text-sm h-full overflow-y-auto scroll-smooth"></div>
+  </aside>
+
+</body>
+</html>
