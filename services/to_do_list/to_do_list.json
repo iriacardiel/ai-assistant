@@ -1,0 +1,30 @@
+[
+    {
+        "taskId": "001",
+        "taskDescription": "Pay Master's tuition fee.",
+        "Completed": true,
+        "registerDate": "2025-06-24 08:52",
+        "dueDate": "never"
+    },
+    {
+        "taskId": "002",
+        "taskDescription": "Print documentation for enrolling the Master.",
+        "Completed": false,
+        "registerDate": "2025-06-24 08:52",
+        "dueDate": "never"
+    },
+    {
+        "taskId": "003",
+        "taskDescription": "Doctor's appointment.",
+        "Completed": false,
+        "registerTime": "2025-06-24 08:52",
+        "dueDate": "2025-06-25 09:00"
+    },
+    {
+        "taskId": "004",
+        "taskDescription": "Buy soya milk.",
+        "Completed": false,
+        "registerTime": "2025-06-24 08:52",
+        "dueDate": "never"
+    }
+]

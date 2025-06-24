@@ -10,6 +10,7 @@ from chat.agent.prompts import get_system_prompt
 from chat.agent.state import AgentState
 from chat.agent.tools import (
     check_system_time,
+    check_to_do_list,
     update_to_do_list
 )
 from config.settings import Settings
@@ -82,6 +83,7 @@ class Agent:
 
         tools = [
             check_system_time,
+            check_to_do_list,
             update_to_do_list
         ]
 
@@ -141,7 +143,7 @@ class Agent:
 
         chat_input = ""
         last_ai_message = state["_messages"][-1]
-        sensitive_tools = ["update_to_do_list"]
+        sensitive_tools = []
 
         for tool_call in last_ai_message.tool_calls:
             tool_message = ToolMessage(tool_call_id=tool_call["id"], content="")
