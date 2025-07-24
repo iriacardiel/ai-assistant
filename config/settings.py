@@ -13,3 +13,4 @@ class Settings:
     MODEL_SERVER = os.environ.get("MODEL_SERVER")
     MODEL_NAME = os.environ.get("MODEL_NAME")
     SOFTWARE_VERSION = os.environ.get("SOFTWARE_VERSION")
+    LETTA_API_KEY = os.environ.get("LETTA_API_KEY")
